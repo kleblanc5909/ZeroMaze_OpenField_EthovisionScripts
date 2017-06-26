@@ -2,7 +2,7 @@
 """
 Created on Tue Feb 28 21:28:53 2017
 
-@author: james.leblanc
+@author: leblanckh
 """
 
 import pandas as pd
@@ -22,14 +22,78 @@ FileList = os.listdir(dataFolder)
 
 ONE_MINUTE_AS_FRAMES = 1798
 TWO_MINUTES_AS_FRAMES = 2 * ONE_MINUTE_AS_FRAMES
+NO_BASELINE_10MIN_SESSION_TRIAL_LENGTH = 601
 
-for File in FileList:
+
+
+    
+
+def create_DataBlock(aDataFrame, cutoffTimeSeconds, shortTimeIdx, longTimeIdx):
+    """
+    Creates a dataFrame, theData, that contains the actual raw data values.
+    It also replaces missing values in the movement column of data with NaN, then interpolates
+    returns: theData, movement column data (isMovingData), LED on column (LEDon)
+    """
+    if df['Trial time'].iloc[-1] <cutoffTimeSeconds:
+        theData = df.loc[shortTimeIdx:,'Trial time':'LED OFF'] #NumHdr + 1
+    else:
+        theData = df.loc[longTimeIdx:,'Trial time':'LED OFF'] #NumHdr + 8992
+    
+    firstRow = theData[:1]
+    lastRow = theData[-1:]
+    
+    firstRow[firstRow == '-'] = 0
+    lastRow[lastRow == '-'] = 0
+    
+    theData[:1] = firstRow
+    theData[-1:] = lastRow
+     #replace missing data (-) with NaN, then interpolate
+    theData.replace('-',np.NaN,inplace = True)
+    theData.interpolate(method = 'values', axis = 0, inplace = True)
+    theData.loc[:,'Movement(Moving / Center-point)'] = Binary_Data_Interpolation_CleanUp(theData.loc[:,'Movement(Moving / Center-point)']) 
+    theData.loc[:,'LED ON'] = Binary_Data_Interpolation_CleanUp(theData.loc[:,'LED ON']) 
+    
+    return theData
+    
+def Binary_Data_Interpolation_CleanUp(binaryDataColumn):
+    """
+    After interpolation, binary data columns need decimal point values converted to 0s or 1s.
+    This function sets all values 0.5 and greater to 1, and all values less than 0.5 to 0.
+    Inputs: the binary data column with decimal values
+    Returns: the binary data column with 0s and 1s only
+    """
+    
+    binaryDataColumn[binaryDataColumn >= 0.5] = 1
+    binaryDataColumn[binaryDataColumn < 0.5] = 0
+    
+    return binaryDataColumn
+
+def Binary_Data_Transition_Point_Finder(binaryDataColumn):
+    """
+    Uses a diff method to find when 0 changes to 1 and vice versa in binary data column
+    Defines these transitions as either the starting point or ending point of an action or state, respectively
+    and sends that index value to a list
+    Also sets the first and last value of the column to 0 for edge case handling
+    
+    input: binaryDataColumn
+    Returns:  a list of binaryDataStartPoints and binaryDataEndPoints
+    """
+    binaryDataColumn.iat[0] = 0
+    binaryDataColumn.iat[-1] = 0
+    binaryDataTrans = binaryDataColumn.diff()
+    binaryDataStartingPoints = binaryDataTrans[binaryDataTrans == 1].index.tolist()
+    binaryDataEndingPoints = binaryDataTrans[binaryDataTrans == -1].index.tolist()
+    return binaryDataStartingPoints, binaryDataEndingPoints
+    
+for File in FileList:    
     if not File.endswith('.xlsx'):
         print ("skipping file named", File)
         continue
+    
     df = pd.read_excel(File, header = None)
-    #extract information from the header in the raw data from Noldus
     NumberofHeaderRows = int(df.iloc[0,1])
+    NB10MIN_NHR = NumberofHeaderRows +1
+    FiveMinBaseline2HSession_NHR = NumberofHeaderRows + 8992
     Header = df.iloc[31:NumberofHeaderRows - 3,:]
     SubjectFilters = ["Subject", "Mouse","subject", "mouse", "Animal"]
     Subject =  Header[Header[0].isin(SubjectFilters)].iloc[0,1]
@@ -44,47 +108,18 @@ for File in FileList:
     #print ("Subject:",Subject, "Genotype:", Genotype,"LEDPower:", LEDPower, "Timestamp:", Timestamp, "Notes", Notes)
     ColumnNames = df.iloc[[NumberofHeaderRows - 2],:].values.tolist()
     df.columns = ColumnNames
-   
     
-    #set up a data block to operate on and clean the data
-    if df['Trial time'].iloc[-1] <601:
-        DataBlock = df.loc[NumberofHeaderRows +1:,'Trial time':'LED OFF']
-    else:
-        DataBlock = df.loc[NumberofHeaderRows +8992:,'Trial time':'LED OFF']
-    
+    DataBlock = create_DataBlock(df, NO_BASELINE_10MIN_SESSION_TRIAL_LENGTH,NB10MIN_NHR,FiveMinBaseline2HSession_NHR)
+    isMovingData = DataBlock.loc[:,'Movement(Moving / Center-point)']
     LEDon = DataBlock.loc[:,'LED ON']
-    
-    firstRow = DataBlock[:1]
-    lastRow = DataBlock[-1:]
-    
-    firstRow[firstRow == '-'] = 0
-    lastRow[lastRow == '-'] = 0
-    
-    DataBlock[:1] = firstRow
-    DataBlock[-1:] = lastRow
-     #replace missing data (-) with NaN, then interpolate
-    DataBlock.replace('-',np.NaN,inplace = True)
-    DataBlock.interpolate(method = 'values', axis = 0, inplace = True)
-    isMovingData = DataBlock.loc[:,'Movement(Moving / Center-point)']    
-    isMovingData[isMovingData >= 0.5] = 1
-    isMovingData[isMovingData < 0.5] = 0
-    
-    #slice the data based on the starting and ending rows for movement
-    isMovingData.iat[0] = 0
-    isMovingData.iat[-1] = 0
-    movingTrans = isMovingData.diff()
-    MovingstartingPoints = movingTrans[movingTrans == 1].index.tolist()
-    MovingendingPoints = movingTrans[movingTrans == -1].index.tolist()
-    print("before fix: Move start,end", MovingstartingPoints, MovingendingPoints)
+    MovingStartingPoints,MovingEndingPoints = Binary_Data_Transition_Point_Finder(isMovingData)
+   
     
 # for trials with 2 minute LED off periods, discard the 2nd minute of data and reassign DataBlock variables
     if df['Trial time'].iloc[-1] >601:
         TotalNumberDataRows = len(LEDon)
         FinalIndexLabel = DataBlock[-1:].index.tolist()[0]
-        LEDon.iat[0] = 0
-        LEDon.iat[-1] = 0
-        LEDtrans = LEDon.diff()
-        LEDoffStart = LEDtrans[LEDtrans == -1].index.tolist()
+        LEDonStart,LEDoffStart = Binary_Data_Transition_Point_Finder(LEDon)
         LEDoffMin2Start = [x+ONE_MINUTE_AS_FRAMES for x in LEDoffStart]
         LEDoffMin2End = [x+TWO_MINUTES_AS_FRAMES for x in LEDoffStart]
         AllMinutes2drop = set()
@@ -92,7 +127,7 @@ for File in FileList:
         for i in range(len(LEDoffMin2Start)):
             curStart = LEDoffMin2Start[i]+1
             curEnd = LEDoffMin2End[i]+1
-            print("current start,end", curStart,curEnd)
+
 
             #protect against End of File (EoF)
             if curStart >= FinalIndexLabel:
@@ -101,30 +136,30 @@ for File in FileList:
                 if curEnd >= FinalIndexLabel:
                     curEnd = FinalIndexLabel - 1 #if EOF need to adjust down 1
                     
-            for i in range(len(MovingstartingPoints)):
-                MoveStart = MovingstartingPoints[i]+1
-                MoveEnd = MovingendingPoints[i]
+            for i in range(len(MovingStartingPoints)):
+                MoveStart = MovingStartingPoints[i]+1
+                MoveEnd = MovingEndingPoints[i]
                 if MoveEnd in range (curStart,curEnd):
-                    print("For MoveEnd", MoveEnd, "before: move column at curStart", DataBlock.loc[curStart-1,'Movement(Moving / Center-point)'], curStart-1)
+#                    print("For MoveEnd", MoveEnd, "before: move column at curStart", DataBlock.loc[curStart-1,'Movement(Moving / Center-point)'], curStart-1)
                     DataBlock.loc[curStart-1,'Movement(Moving / Center-point)'] = 0
-                    print("For MoveEnd", MoveEnd, "after:move column at curStart", DataBlock.loc[curStart-1,'Movement(Moving / Center-point)'], curStart-1)
+#                    print("For MoveEnd", MoveEnd, "after:move column at curStart", DataBlock.loc[curStart-1,'Movement(Moving / Center-point)'], curStart-1)
                 if MoveStart in range(curStart,curEnd):
-                    print("For MoveStart", MoveStart, "before: move column at curEnd", DataBlock.loc[curEnd+1,'Movement(Moving / Center-point)'], curEnd+1)
+#                    print("For MoveStart", MoveStart, "before: move column at curEnd", DataBlock.loc[curEnd+1,'Movement(Moving / Center-point)'], curEnd+1)
                     DataBlock.loc[curEnd+1,'Movement(Moving / Center-point)'] = 0
-                    print("For MoveStart", MoveStart, "after: move column at curEnd", DataBlock.loc[curEnd+1,'Movement(Moving / Center-point)'], curEnd+1)
+#                    print("For MoveStart", MoveStart, "after: move column at curEnd", DataBlock.loc[curEnd+1,'Movement(Moving / Center-point)'], curEnd+1)
 
                 
 
-            print("JJ FinalIdxL is ", FinalIndexLabel)
+#            print("JJ FinalIdxL is ", FinalIndexLabel)
             #create a set that includes all index labels for the current minute
             if curEnd<=FinalIndexLabel:
                 Minute2dropSpan = set(range(curStart, curEnd+1))
-                print(" XXXXXXX ")
-                print("Minute2dropSpan max val is ", max(Minute2dropSpan))
+#                print(" XXXXXXX ")
+#                print("Minute2dropSpan max val is ", max(Minute2dropSpan))
             else:
                 Minute2dropSpan = set(range(curStart, curEnd))
-                print(" XXXXXXX ")
-                print("Minute2dropSpan max val is ", max(Minute2dropSpan))
+#                print(" XXXXXXX ")
+#                print("Minute2dropSpan max val is ", max(Minute2dropSpan))
             #perform set Union to accumulate the superset that contains all minutes to be dropped
             AllMinutes2drop = AllMinutes2drop | Minute2dropSpan  
 
@@ -140,8 +175,8 @@ for File in FileList:
 #        print("DataBlock.iat[-1].index is ", DataBlock.index.tolist()[-1])
 #        print("Length of Datablock", len(LEDon))        
         DataBlock = DataBlock.loc[idx_2_keepAsList]
-        print(" *****  After the suplex  ***** ")
-        print("DB moving around start of interest (12625) is", DataBlock.loc[12625:14440,'Movement(Moving / Center-point)'])
+#        print(" *****  After the suplex  ***** ")
+#        print("DB moving around start of interest (12625) is", DataBlock.loc[12625:14440,'Movement(Moving / Center-point)'])
 #        print("DataBlock.iat[0].index is ", DataBlock.index.tolist()[0])
 #        print("DataBlock.iat[-1].index is ", DataBlock.index.tolist()[-1])
 #        print("length of DataBlock", len(LEDon))
@@ -150,7 +185,7 @@ for File in FileList:
         movingTrans = isMovingData.diff()
         MovingstartingPoints = movingTrans[movingTrans == 1].index.tolist()
         MovingendingPoints = movingTrans[movingTrans == -1].index.tolist()
-        print("after fix: Move start,end", MovingstartingPoints, MovingendingPoints)
+#        print("after fix: Move start,end", MovingstartingPoints, MovingendingPoints)
 
 
     isMovingData = DataBlock.loc[:,'Movement(Moving / Center-point)']
@@ -196,7 +231,7 @@ for File in FileList:
     for i in range(len(MovingstartingPoints)):
         currentStart = MovingstartingPoints[i]+1
         currentEnd = MovingendingPoints[i]
-        print("current start, end", currentStart, currentEnd)
+#        print("current start, end", currentStart, currentEnd)
         LEDonSpan = LEDon.loc[currentStart:currentEnd]
         numON = len(LEDonSpan[LEDonSpan ==1])
         numOFF = len(LEDonSpan[LEDonSpan ==0])
