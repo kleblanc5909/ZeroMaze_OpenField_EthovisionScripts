@@ -7,4 +7,4 @@ Input Files:These are excel documents with a header of approximately 40 rows con
 
 Output Files: Excel files consisting of a row of column titles with the selected output variable names, both dependent and independent variables from the header, followed by separate rows of the data for each subject. In general, these scripts analyze the number of movements, the average duration of movements, the speed while moving, average velocity, the percent of time in the open or center, and the number of movements into the open or center.
 
-The different scripts depend on the experimental task (zero maze or open field), and the variables that are analyzed. Optogenetic experiments take into account the LED status, DREADD experiments include variables for drug and the length of the files.
+The different scripts depend on the experimental task (zero maze or open field), and the variables that are analyzed. Optogenetic experiments take into account the LED status, DREADD experiments include variables for drug. 
