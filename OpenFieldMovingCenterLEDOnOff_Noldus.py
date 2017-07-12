@@ -85,7 +85,7 @@ def Binary_Data_Transition_Point_Finder(binaryDataColumn):
     binaryDataEndingPoints = binaryDataTrans[binaryDataTrans == -1].index.tolist()
     return binaryDataStartingPoints, binaryDataEndingPoints
     
-def Discard_Second_Minute_LEDOFF ():
+def Discard_Second_Minute_LEDOFF (DataBlock, isMovingData, LEDon, MovingStartingPoints, MovingEndingPoints):
     """
     Discards the second minute of a two minute LED OFF period by finding the start and end of the
     second minute, creating a set that includes all index labels for the current minute,
@@ -93,10 +93,57 @@ def Discard_Second_Minute_LEDOFF ():
     and creating a set of index labels to be kept and reassigning these to DataBlock. It also
     performs edge case handling in case a movement starts or ends during the second minute of LED OFF.
     
-    input:
-    Returns: DataBlock adjusted
+    input: DataBlock, isMovingData, LEDon, MovingStartingPoints, MovingEndingPoints
+    Returns: DataBlock, isMovingData,MovingstartingPoints and MovingendingPoints adjusted
     
     """
+    if df['Trial time'].iloc[-1] >601:
+        FinalIndexLabel = DataBlock[-1:].index.tolist()[0]
+        LEDonStart,LEDoffStart = Binary_Data_Transition_Point_Finder(LEDon)
+        LEDoffMin2Start = [x+ONE_MINUTE_AS_FRAMES for x in LEDoffStart]
+        LEDoffMin2End = [x+TWO_MINUTES_AS_FRAMES for x in LEDoffStart]
+        AllMinutes2drop = set()
+
+        for i in range(len(LEDoffMin2Start)):
+            curStart = LEDoffMin2Start[i]+1
+            curEnd = LEDoffMin2End[i]+1
+
+
+            #protect against End of File (EoF)
+            if curStart >= FinalIndexLabel:
+                break;
+            else:
+                if curEnd >= FinalIndexLabel:
+                    curEnd = FinalIndexLabel - 1 #if EOF need to adjust down 1
+                    
+            for i in range(len(MovingStartingPoints)):
+                MoveStart = MovingStartingPoints[i]+1
+                MoveEnd = MovingEndingPoints[i]
+                if MoveEnd in range (curStart,curEnd):
+                    DataBlock.loc[curStart-1,'Movement(Moving / Center-point)'] = 0
+                if MoveStart in range(curStart,curEnd):
+                    DataBlock.loc[curEnd+1,'Movement(Moving / Center-point)'] = 0                
+
+            #create a set that includes all index labels for the current minute
+            if curEnd<=FinalIndexLabel:
+                Minute2dropSpan = set(range(curStart, curEnd+1))
+            else:
+                Minute2dropSpan = set(range(curStart, curEnd))
+            #perform set Union to accumulate the superset that contains all minutes to be dropped
+            AllMinutes2drop = AllMinutes2drop | Minute2dropSpan  
+
+        # Outside the loop create a set of index labels that should be kept
+        idx_2_keep = set(DataBlock.index.tolist()) - AllMinutes2drop
+        idx_2_keepAsList = list(idx_2_keep)
+        idx_2_keepAsList.sort()    
+        DataBlock = DataBlock.loc[idx_2_keepAsList]
+        isMovingData = DataBlock.loc[:,'Movement(Moving / Center-point)']
+        isMovingData.iat[-1] = 0
+        movingTrans = isMovingData.diff()
+        MovingstartingPoints = movingTrans[movingTrans == 1].index.tolist()
+        MovingendingPoints = movingTrans[movingTrans == -1].index.tolist()
+        return DataBlock, isMovingData,MovingstartingPoints,MovingendingPoints
+
     
 for File in FileList:    
     if not File.endswith('.xlsx'):
