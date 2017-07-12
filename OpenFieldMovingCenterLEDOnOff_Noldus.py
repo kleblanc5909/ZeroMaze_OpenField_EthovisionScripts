@@ -85,6 +85,19 @@ def Binary_Data_Transition_Point_Finder(binaryDataColumn):
     binaryDataEndingPoints = binaryDataTrans[binaryDataTrans == -1].index.tolist()
     return binaryDataStartingPoints, binaryDataEndingPoints
     
+def Discard_Second_Minute_LEDOFF ():
+    """
+    Discards the second minute of a two minute LED OFF period by finding the start and end of the
+    second minute, creating a set that includes all index labels for the current minute,
+    performing a set union to accumulate the superset that contains all minutes to be dropped,
+    and creating a set of index labels to be kept and reassigning these to DataBlock. It also
+    performs edge case handling in case a movement starts or ends during the second minute of LED OFF.
+    
+    input:
+    Returns: DataBlock adjusted
+    
+    """
+    
 for File in FileList:    
     if not File.endswith('.xlsx'):
         print ("skipping file named", File)
@@ -117,7 +130,6 @@ for File in FileList:
     
 # for trials with 2 minute LED off periods, discard the 2nd minute of data and reassign DataBlock variables
     if df['Trial time'].iloc[-1] >601:
-        TotalNumberDataRows = len(LEDon)
         FinalIndexLabel = DataBlock[-1:].index.tolist()[0]
         LEDonStart,LEDoffStart = Binary_Data_Transition_Point_Finder(LEDon)
         LEDoffMin2Start = [x+ONE_MINUTE_AS_FRAMES for x in LEDoffStart]
