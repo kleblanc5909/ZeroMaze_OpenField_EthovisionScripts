@@ -15,13 +15,15 @@ myDataList = []
 os.chdir(dataFolder)
 FileList = os.listdir(dataFolder)
 
-
-for File in FileList:
-    if not File.endswith('.xlsx'):
-        print ("skipping file named", File)
-        continue
-    df = pd.read_excel(File, header = None)
-    #extract information from the header in the raw data from Noldus
+def Extract_Header_Info(Filename):
+    """
+    Identifies the length of the header,Extracts independent variable 
+    information from the header, and assigns the column names to the row that
+    contains the column information in the header
+    
+    inputs: Filename
+    Returns: NumberofHeaderRows, Subject, Genotype, Gender, Timestamp, Notes, 
+    """
     NumberofHeaderRows = int(df.iloc[0,1])
     Header = df.iloc[31:NumberofHeaderRows - 3,:]
     SubjectFilters = ["Subject", "Mouse","subject", "mouse"]
@@ -37,7 +39,16 @@ for File in FileList:
     #print ("Subject:",Subject, "Genotype:", Genotype,"Gender:", Gender,"Timestamp:", Timestamp, "Notes", Notes)
     ColumnNames = df.iloc[[NumberofHeaderRows - 2],:].values.tolist()
     df.columns = ColumnNames
-   
+    return NumberofHeaderRows,Subject,Genotype,Gender,Timestamp,Notes
+
+for File in FileList:
+    if not File.endswith('.xlsx'):
+        print ("skipping file named", File)
+        continue
+    df = pd.read_excel(File, header = None)
+    #extract information from the header in the raw data from Noldus
+    
+    NumberofHeaderRows,Subject,Genotype,Gender,Timestamp,Notes = Extract_Header_Info(File)
     
     #set up a data block to operate on and clean the data
     if df['Trial time'].iloc[-1] > 601:
