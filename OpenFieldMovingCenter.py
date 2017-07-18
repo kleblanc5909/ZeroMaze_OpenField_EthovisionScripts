@@ -7,8 +7,11 @@ Created on Tue Feb 28 21:28:53 2017
 
 import pandas as pd
 import numpy as np
+from scipy import stats
 import os
 import sys
+import matplotlib.pyplot as plt
+plt.style.use('ggplot')
 dataFolder = "/Users/leblanckh/data/KO_WT_OpenField_RawData"
 resultsColumns = ["Subject", "Group", "Gender", "Timestamp", "Notes", "Time in center (%)", "Time in center while moving (%)", "Number of movements", "Average duration of movements (s)", "Total time moving (s)", "Speed while moving (cm/s)", "Average Velocity (cm/s)", "Number of movements in center"]
 myDataList = []
@@ -32,7 +35,7 @@ def Extract_Header_Info(dataframe):
     SubjectFilters = ["Subject", "Mouse","subject", "mouse"]
     Subject =  Header[Header[0].isin(SubjectFilters)].iloc[0,1]
     GenotypeFilters = ["Genotype", "Group", "genotype", "group", "genotype/group"]
-    Genotype =  Header[Header[0].isin(GenotypeFilters)].iloc[0,1]
+    Genotype =  str(Header[Header[0].isin(GenotypeFilters)].iloc[0,1])
     GenderFilters = ["Sex", "Gender", "sex", "gender"]
     Gender =  Header[Header[0].isin(GenderFilters)].iloc[0,1]
     TimestampFilters = ["Timestamp", "timestamp"]
@@ -174,9 +177,16 @@ for File in FileList:
     print (myDataList)
     
 resultsDF = pd.DataFrame(data = myDataList, columns=resultsColumns)
-os.chdir("/Users/leblanckh/data/KO_WT_OpenField_RawData/OutputFiles")
-writer = pd.ExcelWriter('KO_and_WT_OpenField_Movement_Analysis.xlsx')
-resultsDF.to_excel(writer,'Sheet1')
-writer.save()
+
+GroupedResults = resultsDF.groupby(Gt)
+print("GroupedResults", GroupedResults)
+GroupMeans = GroupedResults.mean()
+GroupError = stats.sem(GroupedResults)
+fig,ax = plt.subplots()
+GroupMeans.plot.bar(yerr=GroupError, ax = ax)
+#os.chdir("/Users/leblanckh/data/KO_WT_OpenField_RawData/OutputFiles")
+#writer = pd.ExcelWriter('KO_and_WT_OpenField_Movement_Analysis.xlsx')
+#resultsDF.to_excel(writer,'Sheet1')
+#writer.save()
 
 
