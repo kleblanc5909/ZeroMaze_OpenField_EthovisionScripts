@@ -41,7 +41,7 @@ def Extract_Header_Info(dataframe):
     TimestampFilters = ["Timestamp", "timestamp"]
     Timestamp =  Header[Header[0].isin(TimestampFilters)].iloc[0,1]
     NotesFilters = ["Notes", "notes"]
-    Notes =  Header[Header[0].isin(NotesFilters)].iloc[0,1]
+    Notes =  str(Header[Header[0].isin(NotesFilters)].iloc[0,1])
     #print ("Subject:",Subject, "Genotype:", Genotype,"Gender:", Gender,"Timestamp:", Timestamp, "Notes", Notes)
     ColumnNames = dataframe.iloc[[NumberofHeaderRows - 2],:].values.tolist()
     dataframe.columns = ColumnNames
@@ -174,14 +174,18 @@ for File in FileList:
     Moves, AvgMoveTime, TotalMoveTime, AvgVelMove, AvgVel, \
     inCenter]
     myDataList.append(Dataz)
+    DataForAnalysis = [Gt,PerTimeCenter, PerTimeCenterMove, \
+    Moves, AvgMoveTime, TotalMoveTime, AvgVelMove, AvgVel, \
+    inCenter] 
     print (myDataList)
     
 resultsDF = pd.DataFrame(data = myDataList, columns=resultsColumns)
 
-GroupedResults = resultsDF.groupby(Gt)
+GroupedResults = resultsDF.groupby('Group')["Time in center (%)"]
 print("GroupedResults", GroupedResults)
 GroupMeans = GroupedResults.mean()
-GroupError = stats.sem(GroupedResults)
+print("groupMeans", GroupMeans)
+GroupError = GroupedResults.std()
 fig,ax = plt.subplots()
 GroupMeans.plot.bar(yerr=GroupError, ax = ax)
 #os.chdir("/Users/leblanckh/data/KO_WT_OpenField_RawData/OutputFiles")
