@@ -61,14 +61,8 @@ def Create_DataBlock(dataframe, cutoffTimeSeconds, shortTimeIdx, longTimeIdx):
     else:
         theData = dataframe.loc[longTimeIdx:,initialColumnName:finalColumnName] 
     
-    firstRow = theData[:1]
-    lastRow = theData[-1:]
-    
-    firstRow[firstRow == '-'] = 0
-    lastRow[lastRow == '-'] = 0
-    
-    theData[:1] = firstRow
-    theData[-1:] = lastRow
+    theData[:1].replace('-',0,inplace = True)
+    theData[-1:].replace('-',0,inplace = True)
      #replace missing data (-) with NaN, then interpolate
     theData.replace('-',np.NaN,inplace = True)
     theData.interpolate(method = 'values', axis = 0, inplace = True)
@@ -170,6 +164,8 @@ def Create_Group_Bar_Plot (dataframe,dataColumnName):
     fig,ax = plt.subplots()
     ax.set_ylabel(dataColumnName)
     GroupMeans.plot.bar(yerr=GroupError, ax = ax)
+    TitleName = dataColumnName.split('(', 1)[0]
+    plt.savefig('OutputFiles/' + TitleName +'.eps',format = "eps",transparent = True)
     
 for File in FileList:
     if not File.endswith('.xlsx'):
@@ -198,6 +194,7 @@ resultsDF = pd.DataFrame(data = myDataList, columns=resultsColumns)
 ColumnsToAnalyze = resultsColumns[5:]
 for ColumnLabel in ColumnsToAnalyze:
     Create_Group_Bar_Plot(resultsDF,ColumnLabel)
+    
 
 os.chdir("/Users/leblanckh/data/KO_WT_OpenField_RawData/OutputFiles")
 writer = pd.ExcelWriter('KO_and_WT_OpenField_Movement_Analysis.xlsx')
