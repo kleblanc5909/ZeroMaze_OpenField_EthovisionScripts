@@ -123,6 +123,7 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
     TotalMoveDuration = 0
     TotalVelocity = 0
     TotalFramesMoving = 0
+
         
     #loop over the movement data and identify if mouse enters Center
     if len(MoveStart) != len(MoveEnd):
@@ -152,7 +153,24 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
     return PercentTimeinCenter, PercentTimeinCenterMoving, MovementBlocks, AvgMoveDuration, \
     TotalMoveDuration, AvgVelocityMoving, AvgVelocity, CenterTrue
 
-
+def Create_Group_Bar_Plot (dataframe,dataColumnName):
+    """
+    Groups the dataframe by Genotype and one of the measurements, 
+    takes the mean and standard deviation, and plots the data on a bar graph
+    
+    input: dataframe, dataColumnName
+    return:
+    """
+    GroupedResults = dataframe.groupby('Group')[dataColumnName]
+    print("GroupedResults", GroupedResults)
+    GroupMeans = GroupedResults.mean()
+    print("groupMeans", GroupMeans)
+    GroupError = GroupedResults.std()
+    #color_list = ['tab:gray', 'tab:red', 'tab:gray', 'tab:orange', 'tab:gray', 'tab:purple']
+    fig,ax = plt.subplots()
+    ax.set_ylabel(dataColumnName)
+    GroupMeans.plot.bar(yerr=GroupError, ax = ax)
+    
 for File in FileList:
     if not File.endswith('.xlsx'):
         print ("skipping file named", File)
@@ -174,23 +192,16 @@ for File in FileList:
     Moves, AvgMoveTime, TotalMoveTime, AvgVelMove, AvgVel, \
     inCenter]
     myDataList.append(Dataz)
-    DataForAnalysis = [Gt,PerTimeCenter, PerTimeCenterMove, \
-    Moves, AvgMoveTime, TotalMoveTime, AvgVelMove, AvgVel, \
-    inCenter] 
     print (myDataList)
     
 resultsDF = pd.DataFrame(data = myDataList, columns=resultsColumns)
+ColumnsToAnalyze = resultsColumns[5:]
+for ColumnLabel in ColumnsToAnalyze:
+    Create_Group_Bar_Plot(resultsDF,ColumnLabel)
 
-GroupedResults = resultsDF.groupby('Group')["Time in center (%)"]
-print("GroupedResults", GroupedResults)
-GroupMeans = GroupedResults.mean()
-print("groupMeans", GroupMeans)
-GroupError = GroupedResults.std()
-fig,ax = plt.subplots()
-GroupMeans.plot.bar(yerr=GroupError, ax = ax)
-#os.chdir("/Users/leblanckh/data/KO_WT_OpenField_RawData/OutputFiles")
-#writer = pd.ExcelWriter('KO_and_WT_OpenField_Movement_Analysis.xlsx')
-#resultsDF.to_excel(writer,'Sheet1')
-#writer.save()
+os.chdir("/Users/leblanckh/data/KO_WT_OpenField_RawData/OutputFiles")
+writer = pd.ExcelWriter('KO_and_WT_OpenField_Movement_Analysis.xlsx')
+resultsDF.to_excel(writer,'Sheet1')
+writer.save()
 
 
