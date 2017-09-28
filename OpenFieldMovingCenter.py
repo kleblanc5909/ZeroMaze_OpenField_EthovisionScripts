@@ -13,7 +13,12 @@ import sys
 import matplotlib.pyplot as plt
 plt.style.use('ggplot')
 dataFolder = "/Users/leblanckh/data/KO_WT_OpenField_RawData"
-resultsColumns = ["Subject", "Group", "Gender", "Timestamp", "Notes", "Time in center (%)", "Time in center while moving (%)", "Number of movements", "Average duration of movements (s)", "Total time moving (s)", "Speed while moving (cm/s)", "Average Velocity (cm/s)", "Number of movements in center"]
+resultsColumns = ["Subject", "Group", "Gender", "Timestamp", "Notes", "Time in center (%)", \
+"Time in center while moving (%)", "Time in surround while moving (%)", "Time moving in center only (%)",\
+ "Time moving in surround only (%)","Number of movements", "Average duration of movements (s)", \
+ "Total time moving (s)", "Speed while moving (cm/s)", "Average Velocity (cm/s)", \
+ "Number of movements in center", "Number of movements in surround", "Number of center-only movements", \
+ "Number of surround-only movements"]
 myDataList = []
 os.chdir(dataFolder)
 FileList = os.listdir(dataFolder)
@@ -111,8 +116,14 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
     TotalMoveDuration, AvgVelocityMoving, AvgVelocity,CenterTrue
     """
     CenterTrue = 0
+    CenterOnly = 0
+    SurroundOnly = 0
+    SurroundTrue = 0
     inCenterCutOff = 15
     FramesCenterMoving = 0
+    FramesCenterOnly = 0
+    FramesSurroundOnly = 0
+    FramesSurroundMoving = 0
     MovementBlocks = 0
     TotalMoveDuration = 0
     TotalVelocity = 0
@@ -135,17 +146,37 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
         TotalVelocity = TotalVelocity + MoveVelocity
         isCenterSpan = isInCenter[currentStart:currentEnd]
         numCenter = len(isCenterSpan[isCenterSpan == 1])
+        numSurround = len(isCenterSpan[isCenterSpan == 0])
+        
+        CenterThreshold = 0.95
+        SurroundThreshold = 0.05
+        PercentCenter = numCenter/FramesMoving
+        
+        if PercentCenter >=CenterThreshold:
+            CenterOnly +=1
+            FramesCenterOnly = FramesCenterOnly + numCenter
+        if PercentCenter <=SurroundThreshold:
+            SurroundOnly +=1
+            FramesSurroundOnly = FramesSurroundOnly + numSurround
         if numCenter > inCenterCutOff:
             CenterTrue +=1
             FramesCenterMoving = FramesCenterMoving + numCenter
+        if numSurround > inCenterCutOff:
+            SurroundTrue +=1
+            FramesSurroundMoving = FramesSurroundMoving + numSurround
             
     PercentTimeinCenterMoving = FramesCenterMoving/len(isInCenter)*100
+    PercentTimeinSurroundMoving = FramesSurroundMoving/len(isInCenter)*100
+    PercentTimeCenterOnly = FramesCenterOnly/len(isInCenter)*100
+    PercentTimeSurroundOnly = FramesSurroundOnly/len(isInCenter)*100
     AvgMoveDuration = TotalMoveDuration/MovementBlocks
     AvgVelocityMoving = TotalVelocity/TotalFramesMoving
     PercentTimeinCenter = sum (isInCenter[isInCenter == 1])/len(isInCenter)*100
     AvgVelocity = sum (Velocity)/len(Velocity)
-    return PercentTimeinCenter, PercentTimeinCenterMoving, MovementBlocks, AvgMoveDuration, \
-    TotalMoveDuration, AvgVelocityMoving, AvgVelocity, CenterTrue
+    return PercentTimeinCenter, PercentTimeinCenterMoving, \
+    PercentTimeinSurroundMoving, PercentTimeCenterOnly, PercentTimeSurroundOnly, \
+    MovementBlocks, AvgMoveDuration,TotalMoveDuration, AvgVelocityMoving, \
+    AvgVelocity, CenterTrue, SurroundTrue, CenterOnly, SurroundOnly
 
 def Create_Group_Bar_Plot (dataframe,dataColumnName):
     """
@@ -160,7 +191,7 @@ def Create_Group_Bar_Plot (dataframe,dataColumnName):
     GroupMeans = GroupedResults.mean()
     print("groupMeans", GroupMeans)
     GroupError = GroupedResults.std()
-    #color_list = ['tab:gray', 'tab:red', 'tab:gray', 'tab:orange', 'tab:gray', 'tab:purple']
+    #color_list = ['tab:gray', 'tab:orange', 'tab:gray', 'tab:purple', 'tab:gray', 'tab:red']
     fig,ax = plt.subplots()
     ax.set_ylabel(dataColumnName)
     GroupMeans.plot.bar(yerr=GroupError, ax = ax)
@@ -181,23 +212,24 @@ for File in FileList:
     isInCenter = DataBlock.loc[:,'In zone']
     Velocity = DataBlock.loc [:, 'Velocity']
     startingPoints,endingPoints = Binary_Data_Transition_Point_Finder(isMovingData)
-    PerTimeCenter, PerTimeCenterMove,Moves,AvgMoveTime,TotalMoveTime,AvgVelMove,AvgVel,inCenter \
+    PerTimeCenter, PerTimeCenterMove,PerTimeSurroundMove,PerTimeCenterOnly,PerTimeSurroundOnly,\
+    Moves,AvgMoveTime,TotalMoveTime,AvgVelMove,AvgVel,inCenter, inSurround, inCenterOnly, InSrndOnly \
     = Movement_Analysis(isInCenter,Velocity,startingPoints,endingPoints)
    
-    Dataz = [Sbj,Gt, Sex, DateTime, Note, PerTimeCenter, PerTimeCenterMove, \
-    Moves, AvgMoveTime, TotalMoveTime, AvgVelMove, AvgVel, \
-    inCenter]
+    Dataz = [Sbj,Gt, Sex, DateTime, Note, PerTimeCenter, PerTimeCenterMove,PerTimeSurroundMove, \
+    PerTimeCenterOnly, PerTimeSurroundOnly, Moves, AvgMoveTime, TotalMoveTime, AvgVelMove, AvgVel, \
+    inCenter, inSurround, inCenterOnly, InSrndOnly]
     myDataList.append(Dataz)
     print (myDataList)
     
 resultsDF = pd.DataFrame(data = myDataList, columns=resultsColumns)
 ColumnsToAnalyze = resultsColumns[5:]
-for ColumnLabel in ColumnsToAnalyze:
-    Create_Group_Bar_Plot(resultsDF,ColumnLabel)
-    
-
+#for ColumnLabel in ColumnsToAnalyze:
+#    Create_Group_Bar_Plot(resultsDF,ColumnLabel)
+#    
+#
 os.chdir("/Users/leblanckh/data/KO_WT_OpenField_RawData/OutputFiles")
-writer = pd.ExcelWriter('KO_and_WT_OpenField_Movement_Analysis.xlsx')
+writer = pd.ExcelWriter('KO_and_WT_OpenField_Movement_Analysis2.xlsx')
 resultsDF.to_excel(writer,'Sheet1')
 writer.save()
 
