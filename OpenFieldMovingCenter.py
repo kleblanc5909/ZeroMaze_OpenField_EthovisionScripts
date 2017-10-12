@@ -16,9 +16,10 @@ dataFolder = "/Users/leblanckh/data/KO_WT_OpenField_RawData"
 resultsColumns = ["Subject", "Group", "Gender", "Timestamp", "Notes", "Time in center (%)", \
 "Time in center while moving (%)", "Time in surround while moving (%)", "Time moving in center only (%)",\
  "Time moving in surround only (%)","Number of movements", "Average duration of movements (s)", \
- "Total time moving (s)", "Speed while moving (cm/s)", "Average Velocity (cm/s)", \
- "Number of movements in center", "Number of movements in surround", "Number of center-only movements", \
- "Number of surround-only movements"]
+ "Total time moving (s)", "Speed while moving (cm/s)",  "Average Velocity for Center Only Movements (cm/s)",\
+ "Average Velocity for Surround Only Movements (cm/s)", "Average Velocity for Center Movements (cm/s)", \
+ "Average Velocity for Surround Movements (cm/s)", "Average Velocity (cm/s)","Number of movements in center",\
+ "Number of movements in surround", "Number of center-only movements", "Number of surround-only movements"]
 myDataList = []
 os.chdir(dataFolder)
 FileList = os.listdir(dataFolder)
@@ -127,9 +128,12 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
     MovementBlocks = 0
     TotalMoveDuration = 0
     TotalVelocity = 0
+    TotalVelCenterOnly = 0
+    TotalVelSurroundOnly = 0
+    TotalVelCenterMove = 0
+    TotalVelSurroundMove = 0
     TotalFramesMoving = 0
-
-        
+    
     #loop over the movement data and identify if mouse enters Center
     if len(MoveStart) != len(MoveEnd):
         print ("Uneven start and end pairs. There are", (len(MoveStart)), "starting points and" , (len(MoveEnd)) ,"MoveEnd" )
@@ -147,23 +151,35 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
         isCenterSpan = isInCenter[currentStart:currentEnd]
         numCenter = len(isCenterSpan[isCenterSpan == 1])
         numSurround = len(isCenterSpan[isCenterSpan == 0])
+        inCenterIndex = isCenterSpan[isCenterSpan == 1].index.tolist()
+        inCenterIndexAdj = [x - (NumHead + 1) for x in inCenterIndex]
+        inSurroundIndex = isCenterSpan[isCenterSpan == 0].index.tolist()
+        inSurroundIndexAdj = [x - (NumHead + 1) for x in inSurroundIndex]
         
-        CenterThreshold = 0.95
-        SurroundThreshold = 0.05
+        CenterThreshold = 0.98
+        SurroundThreshold = 0.02
         PercentCenter = numCenter/FramesMoving
         
         if PercentCenter >=CenterThreshold:
             CenterOnly +=1
             FramesCenterOnly = FramesCenterOnly + numCenter
+            VelocityCenterOnly = sum(Velocity.loc[inCenterIndexAdj])
+            TotalVelCenterOnly = TotalVelCenterOnly + VelocityCenterOnly
         if PercentCenter <=SurroundThreshold:
             SurroundOnly +=1
             FramesSurroundOnly = FramesSurroundOnly + numSurround
+            VelocitySurroundOnly = sum(Velocity.loc[inSurroundIndexAdj])
+            TotalVelSurroundOnly = TotalVelSurroundOnly + VelocitySurroundOnly
         if numCenter > inCenterCutOff:
             CenterTrue +=1
             FramesCenterMoving = FramesCenterMoving + numCenter
+            VelocityCenterMove = sum(Velocity.loc[inCenterIndex])
+            TotalVelCenterMove = TotalVelCenterMove + VelocityCenterMove
         if numSurround > inCenterCutOff:
             SurroundTrue +=1
             FramesSurroundMoving = FramesSurroundMoving + numSurround
+            VelocitySurroundMove = sum(Velocity.loc[inSurroundIndex])
+            TotalVelSurroundMove = TotalVelSurroundMove + VelocitySurroundMove
             
     PercentTimeinCenterMoving = FramesCenterMoving/len(isInCenter)*100
     PercentTimeinSurroundMoving = FramesSurroundMoving/len(isInCenter)*100
@@ -171,11 +187,28 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
     PercentTimeSurroundOnly = FramesSurroundOnly/len(isInCenter)*100
     AvgMoveDuration = TotalMoveDuration/MovementBlocks
     AvgVelocityMoving = TotalVelocity/TotalFramesMoving
+    if FramesCenterOnly > 0:
+        AvgVelocityCenterOnly = TotalVelCenterOnly/FramesCenterOnly
+    else:
+        AvgVelocityCenterOnly = 0
+    if FramesSurroundOnly > 0:
+        AvgVelocitySurroundOnly = TotalVelSurroundOnly/FramesSurroundOnly
+    else:
+        AvgVelocitySurroundOnly = 0
+    if FramesCenterMoving > 0:
+        AvgVelocityCenterMove = TotalVelCenterMove/FramesCenterMoving
+    else:
+        AvgVelocityCenterMove = 0
+    if FramesSurroundMoving > 0:
+        AvgVelocitySurroundMove = TotalVelSurroundMove/FramesSurroundMoving 
+    else:
+        AvgVelocitySurroundMove = 0
     PercentTimeinCenter = sum (isInCenter[isInCenter == 1])/len(isInCenter)*100
     AvgVelocity = sum (Velocity)/len(Velocity)
     return PercentTimeinCenter, PercentTimeinCenterMoving, \
     PercentTimeinSurroundMoving, PercentTimeCenterOnly, PercentTimeSurroundOnly, \
     MovementBlocks, AvgMoveDuration,TotalMoveDuration, AvgVelocityMoving, \
+    AvgVelocityCenterOnly, AvgVelocitySurroundOnly, AvgVelocityCenterMove, AvgVelocitySurroundMove,\
     AvgVelocity, CenterTrue, SurroundTrue, CenterOnly, SurroundOnly
 
 def Create_Group_Bar_Plot (dataframe,dataColumnName):
@@ -213,23 +246,24 @@ for File in FileList:
     Velocity = DataBlock.loc [:, 'Velocity']
     startingPoints,endingPoints = Binary_Data_Transition_Point_Finder(isMovingData)
     PerTimeCenter, PerTimeCenterMove,PerTimeSurroundMove,PerTimeCenterOnly,PerTimeSurroundOnly,\
-    Moves,AvgMoveTime,TotalMoveTime,AvgVelMove,AvgVel,inCenter, inSurround, inCenterOnly, InSrndOnly \
+    Moves,AvgMoveTime,TotalMoveTime,AvgVelMove,AvgVelCO, AvgVelSO, AvgVelCM, AvgVelSM, AvgVel,\
+    inCenter, inSurround, inCenterOnly, InSrndOnly \
     = Movement_Analysis(isInCenter,Velocity,startingPoints,endingPoints)
    
     Dataz = [Sbj,Gt, Sex, DateTime, Note, PerTimeCenter, PerTimeCenterMove,PerTimeSurroundMove, \
-    PerTimeCenterOnly, PerTimeSurroundOnly, Moves, AvgMoveTime, TotalMoveTime, AvgVelMove, AvgVel, \
-    inCenter, inSurround, inCenterOnly, InSrndOnly]
+    PerTimeCenterOnly, PerTimeSurroundOnly, Moves, AvgMoveTime, TotalMoveTime, AvgVelMove, \
+    AvgVelCO, AvgVelSO, AvgVelCM, AvgVelSM, AvgVel,inCenter, inSurround, inCenterOnly, InSrndOnly]
     myDataList.append(Dataz)
     print (myDataList)
     
 resultsDF = pd.DataFrame(data = myDataList, columns=resultsColumns)
 ColumnsToAnalyze = resultsColumns[5:]
-#for ColumnLabel in ColumnsToAnalyze:
-#    Create_Group_Bar_Plot(resultsDF,ColumnLabel)
-#    
-#
+for ColumnLabel in ColumnsToAnalyze:
+    Create_Group_Bar_Plot(resultsDF,ColumnLabel)
+    
+
 os.chdir("/Users/leblanckh/data/KO_WT_OpenField_RawData/OutputFiles")
-writer = pd.ExcelWriter('KO_and_WT_OpenField_Movement_Analysis2.xlsx')
+writer = pd.ExcelWriter('KO_and_WT_OpenField_Movement_Analysis3.xlsx')
 resultsDF.to_excel(writer,'Sheet1')
 writer.save()
 
