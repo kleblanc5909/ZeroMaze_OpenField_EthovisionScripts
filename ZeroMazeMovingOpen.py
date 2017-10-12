@@ -13,9 +13,10 @@ dataFolder = "/Users/leblanckh/data/KO_WT_ZeroMaze_RawData"
 resultsColumns = ["Subject", "Group", "Gender", "Timestamp", "Notes", "Time in Open (%)", \
 "Time in Open while moving (%)", "Time in Closed while moving (%)", "Time moving in Open only (%)",\
  "Time moving in Closed only (%)","Number of movements", "Average duration of movements (s)", \
- "Total time moving (s)", "Speed while moving (cm/s)", "Average Velocity (cm/s)", \
- "Number of movements in Open", "Number of movements in Closed", "Number of Open-only movements", \
- "Number of Closed-only movements"]
+ "Total time moving (s)", "Speed while moving (cm/s)", "Average Velocity for Open Only Movements (cm/s)",\
+ "Average Velocity for Closed Only Movements (cm/s)", "Average Velocity for Open Movements (cm/s)", \
+ "Average Velocity for Closed Movements (cm/s)", "Average Velocity (cm/s)", "Number of movements in Open",\
+ "Number of movements in Closed", "Number of Open-only movements", "Number of Closed-only movements"]
 myDataList = []
 os.chdir(dataFolder)
 FileList = os.listdir(dataFolder)
@@ -106,11 +107,11 @@ def Binary_Data_Transition_Point_Finder(binaryDataColumn):
 def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
     """
     Sets up the initial conditions, loops over the movement data and counts movement blocks,
-    duration and velocity,identifies movements into the center, and runs all of the calculations
+    duration and velocity,identifies movements into the Open, and runs all of the calculations
     
     inputs: inZoneColumn, Velocity Column, and the starting and ending points of the moving column
-    returns: PercentTimeinCenter, PercentTimeinCenterMoving,MovementBlocks, AvgMoveDuration, 
-    TotalMoveDuration, AvgVelocityMoving, AvgVelocity,CenterTrue
+    returns: PercentTimeinOpen, PercentTimeinOpenMoving,MovementBlocks, AvgMoveDuration, 
+    TotalMoveDuration, AvgVelocityMoving, AvgVelocity,OpenTrue
     """
     OpenTrue = 0
     OpenOnly = 0
@@ -124,6 +125,10 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
     MovementBlocks = 0
     TotalMoveDuration = 0
     TotalVelocity = 0
+    TotalVelOpenOnly = 0
+    TotalVelClosedOnly = 0
+    TotalVelOpenMove = 0
+    TotalVelClosedMove = 0
     TotalFramesMoving = 0
     
     #loop over the movement data and identify if mouse enters Open
@@ -143,6 +148,10 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
         isOpenSpan = isInOpen[currentStart:currentEnd]
         numOpen = len(isOpenSpan[isOpenSpan == 1])
         numClosed = len(isOpenSpan[isOpenSpan == 0])
+        inOpenIndex = isOpenSpan[isOpenSpan == 1].index.tolist()
+        inOpenIndexAdj = [x - (NumHead + 1) for x in inOpenIndex]
+        inClosedIndex = isOpenSpan[isOpenSpan == 0].index.tolist()
+        inClosedIndexAdj = [x - (NumHead + 1) for x in inClosedIndex]
         
         OpenThreshold = 0.95
         ClosedThreshold = 0.05
@@ -151,15 +160,23 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
         if PercentOpen >=OpenThreshold:
             OpenOnly +=1
             FramesOpenOnly = FramesOpenOnly + numOpen
+            VelocityOpenOnly = sum(Velocity.loc[inOpenIndexAdj])
+            TotalVelOpenOnly = TotalVelOpenOnly + VelocityOpenOnly
         if PercentOpen <=ClosedThreshold:
             ClosedOnly +=1
             FramesClosedOnly = FramesClosedOnly + numClosed
+            VelocityClosedOnly = sum(Velocity.loc[inClosedIndexAdj])
+            TotalVelClosedOnly = TotalVelClosedOnly + VelocityClosedOnly
         if numOpen > inOpenCutOff:
             OpenTrue +=1
             FramesOpenMoving = FramesOpenMoving + numOpen
+            VelocityOpenMove = sum(Velocity.loc[inOpenIndex])
+            TotalVelOpenMove = TotalVelOpenMove + VelocityOpenMove
         if numClosed > inOpenCutOff:
             ClosedTrue +=1
             FramesClosedMoving = FramesClosedMoving + numClosed
+            VelocityClosedMove = sum(Velocity.loc[inClosedIndex])
+            TotalVelClosedMove = TotalVelClosedMove + VelocityClosedMove
             
     PercentTimeinOpenMoving = FramesOpenMoving/len(isInOpen)*100
     PercentTimeinClosedMoving = FramesClosedMoving/len(isInOpen)*100
@@ -167,11 +184,28 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
     PercentTimeClosedOnly = FramesClosedOnly/len(isInOpen)*100
     AvgMoveDuration = TotalMoveDuration/MovementBlocks
     AvgVelocityMoving = TotalVelocity/TotalFramesMoving
+    if FramesOpenOnly > 0:
+        AvgVelocityOpenOnly = TotalVelOpenOnly/FramesOpenOnly
+    else:
+        AvgVelocityOpenOnly = 0
+    if FramesClosedOnly > 0:
+        AvgVelocityClosedOnly = TotalVelClosedOnly/FramesClosedOnly
+    else:
+        AvgVelocityClosedOnly = 0
+    if FramesOpenMoving > 0:
+        AvgVelocityOpenMove = TotalVelOpenMove/FramesOpenMoving
+    else:
+        AvgVelocityOpenMove = 0
+    if FramesClosedMoving > 0:
+        AvgVelocityClosedMove = TotalVelClosedMove/FramesClosedMoving 
+    else:
+        AvgVelocityClosedMove = 0
     PercentTimeinOpen = sum (isInOpen[isInOpen == 1])/len(isInOpen)*100
     AvgVelocity = sum (Velocity)/len(Velocity)
     return PercentTimeinOpen, PercentTimeinOpenMoving, \
     PercentTimeinClosedMoving, PercentTimeOpenOnly, PercentTimeClosedOnly, \
     MovementBlocks, AvgMoveDuration,TotalMoveDuration, AvgVelocityMoving, \
+    AvgVelocityOpenOnly, AvgVelocityClosedOnly, AvgVelocityOpenMove, AvgVelocityClosedMove,\
     AvgVelocity, OpenTrue, ClosedTrue, OpenOnly, ClosedOnly
 
 for File in FileList:
@@ -189,18 +223,18 @@ for File in FileList:
     Velocity = DataBlock.loc [:, 'Velocity']
     startingPoints,endingPoints = Binary_Data_Transition_Point_Finder(isMovingData)
     PerTimeOpen, PerTimeOpenMove,PerTimeClosedMove,PerTimeOpenOnly,PerTimeClosedOnly,\
-    Moves,AvgMoveTime,TotalMoveTime,AvgVelMove,AvgVel,inOpen, inClosed, inOpenOnly, InClosedOnly \
-    = Movement_Analysis(isInOpen,Velocity,startingPoints,endingPoints)
+    Moves,AvgMoveTime,TotalMoveTime,AvgVelMove,AvgVelCO, AvgVelSO, AvgVelCM, AvgVelSM,AvgVel,\
+    inOpen, inClosed, inOpenOnly, InClosedOnly = Movement_Analysis(isInOpen,Velocity,startingPoints,endingPoints)
    
     Dataz = [Sbj,Gt, Sex, DateTime, Note, PerTimeOpen, PerTimeOpenMove,PerTimeClosedMove, \
-    PerTimeOpenOnly, PerTimeClosedOnly, Moves, AvgMoveTime, TotalMoveTime, AvgVelMove, AvgVel, \
-    inOpen, inClosed, inOpenOnly, InClosedOnly]
+    PerTimeOpenOnly, PerTimeClosedOnly, Moves, AvgMoveTime, TotalMoveTime, AvgVelMove, \
+    AvgVelCO, AvgVelSO, AvgVelCM, AvgVelSM, AvgVel, inOpen, inClosed, inOpenOnly, InClosedOnly]
     myDataList.append(Dataz)
     print (myDataList)
   
 resultsDF = pd.DataFrame(data = myDataList, columns=resultsColumns)
 os.chdir("/Users/leblanckh/data/KO_WT_ZeroMaze_RawData/OutputFiles")
-writer = pd.ExcelWriter('KO_and_WT_Zero_Maze_Movement_Analysis2.xlsx')
+writer = pd.ExcelWriter('KO_and_WT_Zero_Maze_Movement_Analysis3.xlsx')
 resultsDF.to_excel(writer,'Sheet1')
 writer.save()
 
