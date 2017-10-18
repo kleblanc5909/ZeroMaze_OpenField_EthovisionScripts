@@ -24,9 +24,32 @@ ONE_MINUTE_AS_FRAMES = 1798
 TWO_MINUTES_AS_FRAMES = 2 * ONE_MINUTE_AS_FRAMES
 NO_BASELINE_10MIN_SESSION_TRIAL_LENGTH = 601
 
-
-
+def Extract_Header_Info(dataframe):
+    """
+    Identifies the length of the header,Extracts independent variable 
+    information from the header, and assigns the column names to the row that
+    contains the column information in the header
     
+    inputs: dataframe
+    Returns: NumberofHeaderRows, Subject, Drug, Diet, Timestamp, Notes, 
+    """
+    NumberofHeaderRows = int(df.iloc[0,1])
+    Header = df.iloc[31:NumberofHeaderRows - 3,:]
+    SubjectFilters = ["Subject", "Mouse","subject", "mouse", "Animal"]
+    Subject =  Header[Header[0].isin(SubjectFilters)].iloc[0,1]
+    GenotypeFilters = ["Genotype", "Group", "genotype", "group", "genotype/group"]
+    Genotype =  Header[Header[0].isin(GenotypeFilters)].iloc[0,1]
+    LEDFilters = ["LED Stimulation", "LED power", "LED power (mW)"]
+    LEDPower = Header[Header[0].isin(LEDFilters)].iloc[0,1]
+    TimestampFilters = ["Timestamp", "timestamp", "<User-defined 1>"]
+    Timestamp =  Header[Header[0].isin(TimestampFilters)].iloc[0,1]
+    NotesFilters = ["Notes", "notes", "Note"]
+    Notes =  Header[Header[0].isin(NotesFilters)].iloc[0,1]
+    #print ("Subject:",Subject, "Genotype:", Genotype,"LEDPower:", LEDPower, "Timestamp:", Timestamp, "Notes", Notes)
+    ColumnNames = df.iloc[[NumberofHeaderRows - 2],:].values.tolist()
+    df.columns = ColumnNames
+    
+    return NumberofHeaderRows,Subject,Genotype,LEDPower,Timestamp,Notes
 
 def create_DataBlock(aDataFrame, cutoffTimeSeconds, shortTimeIdx, longTimeIdx):
     """
@@ -91,24 +114,9 @@ for File in FileList:
         continue
     
     df = pd.read_excel(File, header = None)
-    NumberofHeaderRows = int(df.iloc[0,1])
-    NB10MIN_NHR = NumberofHeaderRows +1
-    FiveMinBaseline2HSession_NHR = NumberofHeaderRows + 8992
-    Header = df.iloc[31:NumberofHeaderRows - 3,:]
-    SubjectFilters = ["Subject", "Mouse","subject", "mouse", "Animal"]
-    Subject =  Header[Header[0].isin(SubjectFilters)].iloc[0,1]
-    GenotypeFilters = ["Genotype", "Group", "genotype", "group", "genotype/group"]
-    Genotype =  Header[Header[0].isin(GenotypeFilters)].iloc[0,1]
-    LEDFilters = ["LED Stimulation", "LED power", "LED power (mW)"]
-    LEDPower = Header[Header[0].isin(LEDFilters)].iloc[0,1]
-    TimestampFilters = ["Timestamp", "timestamp", "<User-defined 1>"]
-    Timestamp =  Header[Header[0].isin(TimestampFilters)].iloc[0,1]
-    NotesFilters = ["Notes", "notes", "Note"]
-    Notes =  Header[Header[0].isin(NotesFilters)].iloc[0,1]
-    #print ("Subject:",Subject, "Genotype:", Genotype,"LEDPower:", LEDPower, "Timestamp:", Timestamp, "Notes", Notes)
-    ColumnNames = df.iloc[[NumberofHeaderRows - 2],:].values.tolist()
-    df.columns = ColumnNames
-    
+    NumHead,Sbj,GT,LEDstate,DateTime,Note = Extract_Header_Info(df)
+    NB10MIN_NHR = NumHead +1
+    FiveMinBaseline2HSession_NHR = NumHead + 8992
     DataBlock = create_DataBlock(df, NO_BASELINE_10MIN_SESSION_TRIAL_LENGTH,NB10MIN_NHR,FiveMinBaseline2HSession_NHR)
     isMovingData = DataBlock.loc[:,'Movement(Moving / Center-point)']
     LEDon = DataBlock.loc[:,'LED ON']
