@@ -143,15 +143,13 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
         TotalMoveDuration = TotalMoveDuration + MovementDuration
         FramesMoving = (currentEnd-currentStart)
         TotalFramesMoving = TotalFramesMoving + FramesMoving
-        MoveVelocity = sum (Velocity.loc[currentStart:currentEnd])
+        MoveVelocity = sum (VelocityColumn.loc[currentStart:currentEnd])
         TotalVelocity = TotalVelocity + MoveVelocity
-        isOpenSpan = isInOpen[currentStart:currentEnd]
+        isOpenSpan = InZoneColumn[currentStart:currentEnd]
         numOpen = len(isOpenSpan[isOpenSpan == 1])
         numClosed = len(isOpenSpan[isOpenSpan == 0])
         inOpenIndex = isOpenSpan[isOpenSpan == 1].index.tolist()
-        inOpenIndexAdj = [x - (NumHead + 1) for x in inOpenIndex]
         inClosedIndex = isOpenSpan[isOpenSpan == 0].index.tolist()
-        inClosedIndexAdj = [x - (NumHead + 1) for x in inClosedIndex]
         
         OpenThreshold = 0.95
         ClosedThreshold = 0.05
@@ -160,28 +158,28 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
         if PercentOpen >=OpenThreshold:
             OpenOnly +=1
             FramesOpenOnly = FramesOpenOnly + numOpen
-            VelocityOpenOnly = sum(Velocity.loc[inOpenIndexAdj])
+            VelocityOpenOnly = sum(VelocityColumn.loc[inOpenIndex])
             TotalVelOpenOnly = TotalVelOpenOnly + VelocityOpenOnly
         if PercentOpen <=ClosedThreshold:
             ClosedOnly +=1
             FramesClosedOnly = FramesClosedOnly + numClosed
-            VelocityClosedOnly = sum(Velocity.loc[inClosedIndexAdj])
+            VelocityClosedOnly = sum(VelocityColumn.loc[inClosedIndex])
             TotalVelClosedOnly = TotalVelClosedOnly + VelocityClosedOnly
         if numOpen > inOpenCutOff:
             OpenTrue +=1
             FramesOpenMoving = FramesOpenMoving + numOpen
-            VelocityOpenMove = sum(Velocity.loc[inOpenIndex])
+            VelocityOpenMove = sum(VelocityColumn.loc[inOpenIndex])
             TotalVelOpenMove = TotalVelOpenMove + VelocityOpenMove
         if numClosed > inOpenCutOff:
             ClosedTrue +=1
             FramesClosedMoving = FramesClosedMoving + numClosed
-            VelocityClosedMove = sum(Velocity.loc[inClosedIndex])
+            VelocityClosedMove = sum(VelocityColumn.loc[inClosedIndex])
             TotalVelClosedMove = TotalVelClosedMove + VelocityClosedMove
             
-    PercentTimeinOpenMoving = FramesOpenMoving/len(isInOpen)*100
-    PercentTimeinClosedMoving = FramesClosedMoving/len(isInOpen)*100
-    PercentTimeOpenOnly = FramesOpenOnly/len(isInOpen)*100
-    PercentTimeClosedOnly = FramesClosedOnly/len(isInOpen)*100
+    PercentTimeinOpenMoving = FramesOpenMoving/len(InZoneColumn)*100
+    PercentTimeinClosedMoving = FramesClosedMoving/len(InZoneColumn)*100
+    PercentTimeOpenOnly = FramesOpenOnly/len(InZoneColumn)*100
+    PercentTimeClosedOnly = FramesClosedOnly/len(InZoneColumn)*100
     AvgMoveDuration = TotalMoveDuration/MovementBlocks
     AvgVelocityMoving = TotalVelocity/TotalFramesMoving
     if FramesOpenOnly > 0:
@@ -200,8 +198,8 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
         AvgVelocityClosedMove = TotalVelClosedMove/FramesClosedMoving 
     else:
         AvgVelocityClosedMove = 0
-    PercentTimeinOpen = sum (isInOpen[isInOpen == 1])/len(isInOpen)*100
-    AvgVelocity = sum (Velocity)/len(Velocity)
+    PercentTimeinOpen = sum (InZoneColumn[InZoneColumn == 1])/len(InZoneColumn)*100
+    AvgVelocity = sum (VelocityColumn)/len(VelocityColumn)
     return PercentTimeinOpen, PercentTimeinOpenMoving, \
     PercentTimeinClosedMoving, PercentTimeOpenOnly, PercentTimeClosedOnly, \
     MovementBlocks, AvgMoveDuration,TotalMoveDuration, AvgVelocityMoving, \
@@ -234,7 +232,7 @@ for File in FileList:
   
 resultsDF = pd.DataFrame(data = myDataList, columns=resultsColumns)
 os.chdir("/Users/leblanckh/data/KO_WT_ZeroMaze_RawData/OutputFiles")
-writer = pd.ExcelWriter('KO_and_WT_Zero_Maze_Movement_Analysis3.xlsx')
+writer = pd.ExcelWriter('KO_and_WT_Zero_Maze_Movement_Analysis4.xlsx')
 resultsDF.to_excel(writer,'Sheet1')
 writer.save()
 
