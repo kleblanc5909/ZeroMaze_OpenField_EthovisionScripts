@@ -146,15 +146,13 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
         TotalMoveDuration = TotalMoveDuration + MovementDuration
         FramesMoving = (currentEnd-currentStart)
         TotalFramesMoving = TotalFramesMoving + FramesMoving
-        MoveVelocity = sum (Velocity.loc[currentStart:currentEnd])
+        MoveVelocity = sum (VelocityColumn.loc[currentStart:currentEnd])
         TotalVelocity = TotalVelocity + MoveVelocity
-        isCenterSpan = isInCenter[currentStart:currentEnd]
+        isCenterSpan = InZoneColumn.loc[currentStart:currentEnd]
         numCenter = len(isCenterSpan[isCenterSpan == 1])
         numSurround = len(isCenterSpan[isCenterSpan == 0])
         inCenterIndex = isCenterSpan[isCenterSpan == 1].index.tolist()
-        inCenterIndexAdj = [x - (NumHead + 1) for x in inCenterIndex]
         inSurroundIndex = isCenterSpan[isCenterSpan == 0].index.tolist()
-        inSurroundIndexAdj = [x - (NumHead + 1) for x in inSurroundIndex]
         
         CenterThreshold = 0.98
         SurroundThreshold = 0.02
@@ -163,28 +161,28 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
         if PercentCenter >=CenterThreshold:
             CenterOnly +=1
             FramesCenterOnly = FramesCenterOnly + numCenter
-            VelocityCenterOnly = sum(Velocity.loc[inCenterIndexAdj])
+            VelocityCenterOnly = sum(VelocityColumn.loc[inCenterIndex])
             TotalVelCenterOnly = TotalVelCenterOnly + VelocityCenterOnly
         if PercentCenter <=SurroundThreshold:
             SurroundOnly +=1
             FramesSurroundOnly = FramesSurroundOnly + numSurround
-            VelocitySurroundOnly = sum(Velocity.loc[inSurroundIndexAdj])
+            VelocitySurroundOnly = sum(VelocityColumn.loc[inSurroundIndex])
             TotalVelSurroundOnly = TotalVelSurroundOnly + VelocitySurroundOnly
         if numCenter > inCenterCutOff:
             CenterTrue +=1
             FramesCenterMoving = FramesCenterMoving + numCenter
-            VelocityCenterMove = sum(Velocity.loc[inCenterIndex])
+            VelocityCenterMove = sum(VelocityColumn.loc[inCenterIndex])
             TotalVelCenterMove = TotalVelCenterMove + VelocityCenterMove
         if numSurround > inCenterCutOff:
             SurroundTrue +=1
             FramesSurroundMoving = FramesSurroundMoving + numSurround
-            VelocitySurroundMove = sum(Velocity.loc[inSurroundIndex])
+            VelocitySurroundMove = sum(VelocityColumn.loc[inSurroundIndex])
             TotalVelSurroundMove = TotalVelSurroundMove + VelocitySurroundMove
             
-    PercentTimeinCenterMoving = FramesCenterMoving/len(isInCenter)*100
-    PercentTimeinSurroundMoving = FramesSurroundMoving/len(isInCenter)*100
-    PercentTimeCenterOnly = FramesCenterOnly/len(isInCenter)*100
-    PercentTimeSurroundOnly = FramesSurroundOnly/len(isInCenter)*100
+    PercentTimeinCenterMoving = FramesCenterMoving/len(InZoneColumn)*100
+    PercentTimeinSurroundMoving = FramesSurroundMoving/len(InZoneColumn)*100
+    PercentTimeCenterOnly = FramesCenterOnly/len(InZoneColumn)*100
+    PercentTimeSurroundOnly = FramesSurroundOnly/len(InZoneColumn)*100
     AvgMoveDuration = TotalMoveDuration/MovementBlocks
     AvgVelocityMoving = TotalVelocity/TotalFramesMoving
     if FramesCenterOnly > 0:
@@ -203,8 +201,8 @@ def Movement_Analysis(InZoneColumn,VelocityColumn,MoveStart,MoveEnd):
         AvgVelocitySurroundMove = TotalVelSurroundMove/FramesSurroundMoving 
     else:
         AvgVelocitySurroundMove = 0
-    PercentTimeinCenter = sum (isInCenter[isInCenter == 1])/len(isInCenter)*100
-    AvgVelocity = sum (Velocity)/len(Velocity)
+    PercentTimeinCenter = sum (InZoneColumn[InZoneColumn == 1])/len(InZoneColumn)*100
+    AvgVelocity = sum (VelocityColumn)/len(VelocityColumn)
     return PercentTimeinCenter, PercentTimeinCenterMoving, \
     PercentTimeinSurroundMoving, PercentTimeCenterOnly, PercentTimeSurroundOnly, \
     MovementBlocks, AvgMoveDuration,TotalMoveDuration, AvgVelocityMoving, \
@@ -263,7 +261,7 @@ for ColumnLabel in ColumnsToAnalyze:
     
 
 os.chdir("/Users/leblanckh/data/KO_WT_OpenField_RawData/OutputFiles")
-writer = pd.ExcelWriter('KO_and_WT_OpenField_Movement_Analysis3.xlsx')
+writer = pd.ExcelWriter('KO_and_WT_OpenField_Movement_Analysis4.xlsx')
 resultsDF.to_excel(writer,'Sheet1')
 writer.save()
 
