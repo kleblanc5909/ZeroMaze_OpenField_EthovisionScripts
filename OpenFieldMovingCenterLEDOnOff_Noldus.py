@@ -51,29 +51,27 @@ def Extract_Header_Info(dataframe):
     
     return NumberofHeaderRows,Subject,Genotype,LEDPower,Timestamp,Notes
 
-def create_DataBlock(aDataFrame, cutoffTimeSeconds, shortTimeIdx, longTimeIdx):
+def create_DataBlock(dataframe, FirstCutOffTime, shortTimeIdx, longTimeIdx):
     """
     Creates a dataFrame, theData, that contains the actual raw data values.
     It also replaces missing values in the movement column of data with NaN, then interpolates
     returns: theData, movement column data (isMovingData), LED on column (LEDon)
     """
-    if df['Trial time'].iloc[-1] <cutoffTimeSeconds:
-        theData = df.loc[shortTimeIdx:,'Trial time':'LED OFF'] #NumHdr + 1
+    finalColumnName = dataframe.columns[-1]
+    initialColumnName = dataframe.columns[0]
+    
+    if dataframe['Trial time'].iloc[-1] <FirstCutOffTime:
+        theData = dataframe.loc[shortTimeIdx:,initialColumnName:finalColumnName] #NumHdr + 1
     else:
-        theData = df.loc[longTimeIdx:,'Trial time':'LED OFF'] #NumHdr + 8992
+        theData = dataframe.loc[longTimeIdx:,initialColumnName:finalColumnName] #NumHdr + 8992
     
-    firstRow = theData[:1]
-    lastRow = theData[-1:]
-    
-    firstRow[firstRow == '-'] = 0
-    lastRow[lastRow == '-'] = 0
-    
-    theData[:1] = firstRow
-    theData[-1:] = lastRow
+    theData[:1].replace('-',0,inplace = True)
+    theData[-1:].replace('-',0,inplace = True)
      #replace missing data (-) with NaN, then interpolate
     theData.replace('-',np.NaN,inplace = True)
     theData.interpolate(method = 'values', axis = 0, inplace = True)
     theData.loc[:,'Movement(Moving / Center-point)'] = Binary_Data_Interpolation_CleanUp(theData.loc[:,'Movement(Moving / Center-point)']) 
+    theData.loc[:,'In zone'] = Binary_Data_Interpolation_CleanUp(theData.loc[:,'In zone']) 
     theData.loc[:,'LED ON'] = Binary_Data_Interpolation_CleanUp(theData.loc[:,'LED ON']) 
     
     return theData
@@ -106,27 +104,19 @@ def Binary_Data_Transition_Point_Finder(binaryDataColumn):
     binaryDataTrans = binaryDataColumn.diff()
     binaryDataStartingPoints = binaryDataTrans[binaryDataTrans == 1].index.tolist()
     binaryDataEndingPoints = binaryDataTrans[binaryDataTrans == -1].index.tolist()
+    
     return binaryDataStartingPoints, binaryDataEndingPoints
     
-for File in FileList:    
-    if not File.endswith('.xlsx'):
-        print ("skipping file named", File)
-        continue
+def Remove_Minute2_LED_OFF (theData, MoveStart, MoveEnd):
+    """
+    for trials with 2 minute LED off periods, discard the 2nd minute of data and reassign DataBlock variables
     
-    df = pd.read_excel(File, header = None)
-    NumHead,Sbj,GT,LEDstate,DateTime,Note = Extract_Header_Info(df)
-    NB10MIN_NHR = NumHead +1
-    FiveMinBaseline2HSession_NHR = NumHead + 8992
-    DataBlock = create_DataBlock(df, NO_BASELINE_10MIN_SESSION_TRIAL_LENGTH,NB10MIN_NHR,FiveMinBaseline2HSession_NHR)
-    isMovingData = DataBlock.loc[:,'Movement(Moving / Center-point)']
-    LEDon = DataBlock.loc[:,'LED ON']
-    MovingStartingPoints,MovingEndingPoints = Binary_Data_Transition_Point_Finder(isMovingData)
-   
-    
-# for trials with 2 minute LED off periods, discard the 2nd minute of data and reassign DataBlock variables
-    if df['Trial time'].iloc[-1] >601:
-        TotalNumberDataRows = len(LEDon)
-        FinalIndexLabel = DataBlock[-1:].index.tolist()[0]
+    inputs: dataframe and the starting and ending points of the moving column
+    returns: adjusted start and end of movements
+    """
+    if theData['Trial time'].iloc[-1] >601:
+        #TotalNumberDataRows = len(LEDon)
+        FinalIndexLabel = theData[-1:].index.tolist()[0]
         LEDonStart,LEDoffStart = Binary_Data_Transition_Point_Finder(LEDon)
         LEDoffMin2Start = [x+ONE_MINUTE_AS_FRAMES for x in LEDoffStart]
         LEDoffMin2End = [x+TWO_MINUTES_AS_FRAMES for x in LEDoffStart]
@@ -144,17 +134,17 @@ for File in FileList:
                 if curEnd >= FinalIndexLabel:
                     curEnd = FinalIndexLabel - 1 #if EOF need to adjust down 1
                     
-            for i in range(len(MovingStartingPoints)):
-                MoveStart = MovingStartingPoints[i]+1
-                MoveEnd = MovingEndingPoints[i]
-                if MoveEnd in range (curStart,curEnd):
-#                    print("For MoveEnd", MoveEnd, "before: move column at curStart", DataBlock.loc[curStart-1,'Movement(Moving / Center-point)'], curStart-1)
-                    DataBlock.loc[curStart-1,'Movement(Moving / Center-point)'] = 0
-#                    print("For MoveEnd", MoveEnd, "after:move column at curStart", DataBlock.loc[curStart-1,'Movement(Moving / Center-point)'], curStart-1)
-                if MoveStart in range(curStart,curEnd):
-#                    print("For MoveStart", MoveStart, "before: move column at curEnd", DataBlock.loc[curEnd+1,'Movement(Moving / Center-point)'], curEnd+1)
-                    DataBlock.loc[curEnd+1,'Movement(Moving / Center-point)'] = 0
-#                    print("For MoveStart", MoveStart, "after: move column at curEnd", DataBlock.loc[curEnd+1,'Movement(Moving / Center-point)'], curEnd+1)
+            for i in range(len(MoveStart)):
+                MovingStart = MoveStart[i]+1
+                MovingEnd = MoveEnd[i]
+                if MovingEnd in range (curStart,curEnd):
+#                    print("For MoveEnd", MovingEnd, "before: move column at curStart", theData.loc[curStart-1,'Movement(Moving / Center-point)'], curStart-1)
+                    theData.loc[curStart-1,'Movement(Moving / Center-point)'] = 0
+#                    print("For MoveEnd", MovingEnd, "after:move column at curStart", theData.loc[curStart-1,'Movement(Moving / Center-point)'], curStart-1)
+                if MovingStart in range(curStart,curEnd):
+#                    print("For MoveStart", MovingStart, "before: move column at curEnd", theData.loc[curEnd+1,'Movement(Moving / Center-point)'], curEnd+1)
+                    theData.loc[curEnd+1,'Movement(Moving / Center-point)'] = 0
+#                    print("For MoveStart", MovingStart, "after: move column at curEnd", theData.loc[curEnd+1,'Movement(Moving / Center-point)'], curEnd+1)
 
                 
 
@@ -172,60 +162,92 @@ for File in FileList:
             AllMinutes2drop = AllMinutes2drop | Minute2dropSpan  
 
         # Outside the loop create a set of index labels that should be kept
-        idx_2_keep = set(DataBlock.index.tolist()) - AllMinutes2drop
+        idx_2_keep = set(theData.index.tolist()) - AllMinutes2drop
         idx_2_keepAsList = list(idx_2_keep)
         idx_2_keepAsList.sort()
 #        print(" *****  Before all of that nonsense  ***** ")
 ##        print("idx_2_keepAsList is ", idx_2_keepAsList)
 #        print("idx_2_keepAsList[0] is ", idx_2_keepAsList[0], " and idx_2_keepAsList[-1] is ", idx_2_keepAsList[-1])
 #        print(" *****  Before the suplex  ***** ")        
-#        print("DataBlock.iat[0].index is ", DataBlock.index.tolist()[0])
-#        print("DataBlock.iat[-1].index is ", DataBlock.index.tolist()[-1])
+#        print("theData.iat[0].index is ", theData.index.tolist()[0])
+#        print("theData.iat[-1].index is ", theData.index.tolist()[-1])
 #        print("Length of Datablock", len(LEDon))        
-        DataBlock = DataBlock.loc[idx_2_keepAsList]
+        theData = theData.loc[idx_2_keepAsList]
 #        print(" *****  After the suplex  ***** ")
-#        print("DB moving around start of interest (12625) is", DataBlock.loc[12625:14440,'Movement(Moving / Center-point)'])
-#        print("DataBlock.iat[0].index is ", DataBlock.index.tolist()[0])
-#        print("DataBlock.iat[-1].index is ", DataBlock.index.tolist()[-1])
+#        print("DB moving around start of interest (12625) is", theData.loc[12625:14440,'Movement(Moving / Center-point)'])
+#        print("DataBlock.iat[0].index is ", theData.index.tolist()[0])
+#        print("DataBlock.iat[-1].index is ", theData.index.tolist()[-1])
 #        print("length of DataBlock", len(LEDon))
-        isMovingData = DataBlock.loc[:,'Movement(Moving / Center-point)']
+        isMovingData = theData.loc[:,'Movement(Moving / Center-point)']
         isMovingData.iat[-1] = 0
         movingTrans = isMovingData.diff()
-        MovingstartingPoints = movingTrans[movingTrans == 1].index.tolist()
-        MovingendingPoints = movingTrans[movingTrans == -1].index.tolist()
+        NewMoveStart = movingTrans[movingTrans == 1].index.tolist()
+        NewMoveEnd = movingTrans[movingTrans == -1].index.tolist()
 #        print("after fix: Move start,end", MovingstartingPoints, MovingendingPoints)
-
-
-    isMovingData = DataBlock.loc[:,'Movement(Moving / Center-point)']
-    isInCenter = DataBlock.loc[:,'In zone']
-    LEDon = DataBlock.loc[:,'LED ON']
-    TotalNumberDataRows = len(LEDon)
-    LEDoff = DataBlock.loc[:,'LED OFF']
-    Velocity = DataBlock.loc [:, 'Velocity']
-    PercentTimeinCenter = sum (isInCenter[isInCenter == 1])/len(isInCenter)*100
-    AvgVelocity = sum (Velocity)/len(Velocity)
+        
+    return NewMoveStart, NewMoveEnd
+    
+def Movement_Analysis(theData, InZoneColumn,VelocityColumn,NewMoveStart,NewMoveEnd):
+    """
+    Sets up the initial conditions, loops over the movement data and counts movement blocks,
+    duration and velocity,identifies movements into the center, and runs all of the calculations
+    
+    
+    inputs: inZoneColumn, Velocity Column, and the starting and ending points of the moving column
+    returns: PercentTimeinCenter, PercentTimeinCenterMoving,MovementBlocks, AvgMoveDuration, 
+    TotalMoveDuration, AvgVelocityMoving, AvgVelocity,CenterTrue
+    """
+    
+    #isMovingData = theData.loc[:,'Movement(Moving / Center-point)']
+    InZoneColumn = theData.loc[:,'In zone']
+    LEDon = theData.loc[:,'LED ON']
+    #TotalNumberDataRows = len(LEDon)
+    LEDoff = theData.loc[:,'LED OFF']
+    VelocityColumn = theData.loc [:, 'Velocity']
+    #PercentTimeinCenter = sum (InZoneColumn[InZoneColumn == 1])/len(InZoneColumn)*100
+    #AvgVelocity = sum (VelocityColumn)/len(VelocityColumn)
     
     LEDonIdx = LEDon[LEDon ==1].index.tolist()
-    LEDon_Filtered_InCenter = isInCenter[LEDonIdx]
-    LEDon_Filtered_Velocity = Velocity[LEDonIdx]
+    LEDon_Filtered_InCenter = InZoneColumn[LEDonIdx]
+    LEDon_Filtered_Velocity = VelocityColumn[LEDonIdx]
     PercentTimeinCenterLEDon = sum (LEDon_Filtered_InCenter[0:])/len(LEDonIdx)*100
     AvgVelocityLEDon = sum(LEDon_Filtered_Velocity)/len(LEDonIdx)
     LEDoffIdx = LEDoff[LEDoff ==1].index.tolist()
-    LEDoff_Filtered_InCenter = isInCenter[LEDoffIdx]
-    LEDoff_Filtered_Velocity = Velocity[LEDoffIdx]
+    LEDoff_Filtered_InCenter = InZoneColumn[LEDoffIdx]
+    LEDoff_Filtered_Velocity = VelocityColumn[LEDoffIdx]
     PercentTimeinCenterLEDoff = sum (LEDoff_Filtered_InCenter[0:])/len(LEDoffIdx)*100
     AvgVelocityLEDoff = sum(LEDoff_Filtered_Velocity)/len(LEDoffIdx)
     
     
     CenterLEDONTrue = 0
     CenterLEDOFFTrue = 0
+    CenterLEDONOnly = 0
+    SurroundLEDONOnly = 0
+    SurroundLEDONTrue = 0
+    CenterLEDOFFOnly = 0
+    SurroundLEDOFFOnly = 0
+    SurroundLEDOFFTrue = 0
     inCenterCutOff = 15
     LEDCutOff = 15
     FramesCenterLEDONMoving = 0
     FramesCenterLEDOFFMoving = 0
+    FramesCenterLEDONOnly = 0
+    FramesSurroundLEDONOnly = 0
+    FramesSurroundLEDONMoving = 0
+    FramesCenterLEDOFFOnly = 0
+    FramesSurroundLEDOFFOnly = 0
+    FramesSurroundLEDOFFMoving = 0
     MovementBlocksON = 0
     TotalMoveDurationON = 0
     TotalVelocityON = 0
+    TotalVelCenterONOnly = 0
+    TotalVelSurroundONOnly = 0
+    TotalVelCenterONMove = 0
+    TotalVelSurroundONMove = 0
+    TotalVelCenterOFFOnly = 0
+    TotalVelSurroundOFFOnly = 0
+    TotalVelCenterOFFMove = 0
+    TotalVelSurroundOFFMove = 0
     TotalFramesMovingON = 0
     MovementBlocksOFF = 0
     TotalMoveDurationOFF = 0
@@ -234,12 +256,12 @@ for File in FileList:
 
     
     #loop over the movement data and identify occurances of mouse entering Center
-    if len(MovingstartingPoints) != len(MovingendingPoints):
-        print ("Uneven start and end pairs. There are", (len(MovingstartingPoints)), "starting points and" , (len(MovingendingPoints)) ,"endingPoints" )
-    for i in range(len(MovingstartingPoints)):
-        currentStart = MovingstartingPoints[i]+1
-        currentEnd = MovingendingPoints[i]
-#        print("current start, end", currentStart, currentEnd)
+    if len(NewMoveStart) != len(NewMoveEnd):
+        print ("Uneven start and end pairs. There are", (len(NewMoveStart)), "starting points and" , (len(NewMoveEnd)) ,"endingPoints" )
+    for i in range(len(NewMoveStart)):
+        currentStart = NewMoveStart[i]+1
+        currentEnd = NewMoveEnd[i]
+        print("current start, end", currentStart, currentEnd)
         LEDonSpan = LEDon.loc[currentStart:currentEnd]
         numON = len(LEDonSpan[LEDonSpan ==1])
         numOFF = len(LEDonSpan[LEDonSpan ==0])
@@ -256,17 +278,48 @@ for File in FileList:
             for i in range(len(LEDonStartShifted)):
                 currentLEDonStart = LEDonStartShifted[i]
                 currentLEDonEnd = LEDonEndShifted[i]
+                print ("current ON start:", currentLEDonStart, "current ON end:", currentLEDonEnd)
                 MovementBlocksON +=1
                 MovementDurationON = (currentLEDonEnd-currentLEDonStart)/30
                 TotalMoveDurationON = TotalMoveDurationON + MovementDurationON
                 TotalFramesMovingON = TotalFramesMovingON + numON
-                MoveVelocityON = sum (Velocity.loc[currentLEDonStart:currentLEDonEnd])
+                MoveVelocityON = sum (VelocityColumn.loc[currentLEDonStart:currentLEDonEnd])
                 TotalVelocityON = TotalVelocityON + MoveVelocityON
-                isCenterSpan = isInCenter.loc[currentLEDonStart:currentLEDonEnd]
-                numCenter = len(isCenterSpan[isCenterSpan == 1])
-                if numCenter > inCenterCutOff:
+                isCenterSpanON = InZoneColumn.loc[currentLEDonStart:currentLEDonEnd]
+                numCenterON = len(isCenterSpanON[isCenterSpanON == 1])
+                numSurroundON = len(isCenterSpanON[isCenterSpanON == 0])
+                inCenterIndexON = isCenterSpanON[isCenterSpanON == 1].index.tolist()
+                inSurroundIndexON = isCenterSpanON[isCenterSpanON == 0].index.tolist()
+                
+                CenterThreshold = 0.98
+                SurroundThreshold = 0.02
+                PercentCenterON = numCenterON/numON
+        
+                if PercentCenterON >=CenterThreshold:
+                    CenterLEDONOnly +=1
+                    FramesCenterLEDONOnly = FramesCenterLEDONOnly + numCenterON
+                    VelocityCenterOnly = sum(VelocityColumn.loc[inCenterIndexON])
+                    TotalVelCenterONOnly = TotalVelCenterONOnly + VelocityCenterOnly
+                    print("Frames Center Only", FramesCenterLEDONOnly)
+                if PercentCenterON <=SurroundThreshold:
+                    SurroundLEDONOnly +=1
+                    FramesSurroundLEDONOnly = FramesSurroundLEDONOnly + numSurroundON
+                    VelocitySurroundOnly = sum(VelocityColumn.loc[inSurroundIndexON])
+                    TotalVelSurroundONOnly = TotalVelSurroundONOnly + VelocitySurroundOnly
+                    print("Frames Surround Only", FramesSurroundLEDONOnly)
+                if numCenterON > inCenterCutOff:
                     CenterLEDONTrue +=1
-                    FramesCenterLEDONMoving = FramesCenterLEDONMoving + numCenter
+                    FramesCenterLEDONMoving = FramesCenterLEDONMoving + numCenterON
+                    VelocityCenterMove = sum(VelocityColumn.loc[inCenterIndexON])
+                    TotalVelCenterONMove = TotalVelCenterONMove + VelocityCenterMove
+                    print("Frames Center Move", FramesCenterLEDONMoving)
+                if numSurroundON > inCenterCutOff:
+                    SurroundLEDONTrue +=1
+                    FramesSurroundLEDONMoving = FramesSurroundLEDONMoving + numSurroundON
+                    VelocitySurroundMove = sum(VelocityColumn.loc[inSurroundIndexON])
+                    TotalVelSurroundONMove = TotalVelSurroundONMove + VelocitySurroundMove
+                    print("Frames Surround Move", FramesSurroundLEDONMoving)                
+
         if numOFF > LEDCutOff:
             LEDoffTrans = LEDonSpan.diff()
             LEDoffStartingPoints = LEDoffTrans[LEDoffTrans == -1].index.tolist()
@@ -280,34 +333,135 @@ for File in FileList:
             for i in range(len(LEDoffStartShifted)):
                 currentLEDoffStart = LEDoffStartShifted[i]
                 currentLEDoffEnd = LEDoffEndShifted[i]
-#                print("moveStart", currentStart, "moveEnd", currentEnd, "LEDoffstart", currentLEDoffStart, 'LEDoffend', currentLEDoffEnd)
+                print("LEDoffstart", currentLEDoffStart, 'LEDoffend', currentLEDoffEnd)
                 MovementBlocksOFF +=1
                 MovementDurationOFF = (currentLEDoffEnd-currentLEDoffStart)/30
                 TotalMoveDurationOFF = TotalMoveDurationOFF + MovementDurationOFF
                 TotalFramesMovingOFF = TotalFramesMovingOFF + numOFF
-                MoveVelocityOFF = sum (Velocity.loc[currentLEDoffStart:currentLEDoffEnd])
+                MoveVelocityOFF = sum (VelocityColumn.loc[currentLEDoffStart:currentLEDoffEnd])
                 TotalVelocityOFF = TotalVelocityOFF + MoveVelocityOFF
-                isCenterSpan = isInCenter.loc[currentLEDoffStart:currentLEDoffEnd]
-                numCenter = len(isCenterSpan[isCenterSpan == 1])
-                if numCenter > inCenterCutOff:
+                isCenterSpanOFF = InZoneColumn.loc[currentLEDoffStart:currentLEDoffEnd]
+                numCenterOFF = len(isCenterSpanOFF[isCenterSpanOFF == 1])
+                numSurroundOFF = len(isCenterSpanOFF[isCenterSpanOFF == 0])
+                inCenterIndexOFF = isCenterSpanOFF[isCenterSpanOFF == 1].index.tolist()
+                inSurroundIndexOFF = isCenterSpanOFF[isCenterSpanOFF == 0].index.tolist()
+                
+                CenterThreshold = 0.98
+                SurroundThreshold = 0.02
+                PercentCenterOFF = numCenterOFF/numOFF
+        
+                if PercentCenterOFF >=CenterThreshold:
+                    CenterLEDOFFOnly +=1
+                    FramesCenterLEDOFFOnly = FramesCenterLEDOFFOnly + numCenterOFF
+                    VelocityCenterOnly = sum(VelocityColumn.loc[inCenterIndexOFF])
+                    TotalVelCenterOFFOnly = TotalVelCenterOFFOnly + VelocityCenterOnly
+                    print("Frames Center Only", FramesCenterLEDOFFOnly)
+                if PercentCenterOFF <=SurroundThreshold:
+                    SurroundLEDOFFOnly +=1
+                    FramesSurroundLEDOFFOnly = FramesSurroundLEDOFFOnly + numSurroundOFF
+                    VelocitySurroundOnly = sum(VelocityColumn.loc[inSurroundIndexOFF])
+                    TotalVelSurroundOFFOnly = TotalVelSurroundOFFOnly + VelocitySurroundOnly
+                    print("Frames Surround Only", FramesSurroundLEDOFFOnly)
+                if numCenterOFF > inCenterCutOff:
                     CenterLEDOFFTrue +=1
-                    FramesCenterLEDOFFMoving = FramesCenterLEDOFFMoving + numCenter
-#                    print ("isCenterSpan", isCenterSpan, "currentStart", currentLEDoffStart, "currentEnd", currentLEDoffEnd, "Center entries", CenterLEDOFFTrue)
-
+                    FramesCenterLEDOFFMoving = FramesCenterLEDOFFMoving + numCenterOFF
+                    VelocityCenterMove = sum(VelocityColumn.loc[inCenterIndexOFF])
+                    TotalVelCenterOFFMove = TotalVelCenterOFFMove + VelocityCenterMove
+                    print("Frames Center Move", FramesCenterLEDOFFMoving)
+                if numSurroundOFF > inCenterCutOff:
+                    SurroundLEDOFFTrue +=1
+                    FramesSurroundLEDOFFMoving = FramesSurroundLEDOFFMoving + numSurroundOFF
+                    VelocitySurroundMove = sum(VelocityColumn.loc[inSurroundIndexOFF])
+                    TotalVelSurroundOFFMove = TotalVelSurroundOFFMove + VelocitySurroundMove
+                    print("Frames Surround Move", FramesSurroundLEDOFFMoving)
        
-    PercentTimeinCenterMovingON = FramesCenterLEDONMoving/len(isInCenter)*100
-    PercentTimeinCenterMovingOFF = FramesCenterLEDOFFMoving/len(isInCenter)*100
+    PercentTimeinCenterMovingON = FramesCenterLEDONMoving/len(InZoneColumn)*100
+    PercentTimeinCenterMovingOFF = FramesCenterLEDOFFMoving/len(InZoneColumn)*100
+    PercentTimeinSurroundMovingON = FramesSurroundLEDONMoving/len(InZoneColumn)*100
+    PercentTimeinSurroundMovingOFF = FramesSurroundLEDOFFMoving/len(InZoneColumn)*100
+    PercentTimeCenterONOnly = FramesCenterLEDONOnly/len(InZoneColumn)*100
+    PercentTimeSurroundONOnly = FramesSurroundLEDONOnly/len(InZoneColumn)*100
+    PercentTimeCenterOFFOnly = FramesCenterLEDOFFOnly/len(InZoneColumn)*100
+    PercentTimeSurroundOFFOnly = FramesSurroundLEDOFFOnly/len(InZoneColumn)*100
     AvgMoveDurationON = TotalMoveDurationON/MovementBlocksON
     AvgMoveDurationOFF = TotalMoveDurationOFF/MovementBlocksOFF
     AvgVelocityMovingON = TotalVelocityON/TotalFramesMovingON
     AvgVelocityMovingOFF = TotalVelocityOFF/TotalFramesMovingOFF
+    if FramesCenterLEDONOnly > 0:
+        AvgVelocityCenterONOnly = TotalVelCenterONOnly/FramesCenterLEDONOnly
+    else:
+        AvgVelocityCenterONOnly = 0
+    if FramesSurroundLEDONOnly > 0:
+        AvgVelocitySurroundONOnly = TotalVelSurroundONOnly/FramesSurroundLEDONOnly
+    else:
+        AvgVelocitySurroundONOnly = 0
+    if FramesCenterLEDONMoving > 0:
+        AvgVelocityCenterONMove = TotalVelCenterONMove/FramesCenterLEDONMoving
+    else:
+        AvgVelocityCenterONMove = 0
+    if FramesSurroundLEDONMoving > 0:
+        AvgVelocitySurroundONMove = TotalVelSurroundONMove/FramesSurroundLEDONMoving 
+    else:
+        AvgVelocitySurroundONMove = 0
+    if FramesCenterLEDOFFOnly > 0:
+        AvgVelocityCenterOFFOnly = TotalVelCenterOFFOnly/FramesCenterLEDOFFOnly
+    else:
+        AvgVelocityCenterOFFOnly = 0
+    if FramesSurroundLEDOFFOnly > 0:
+        AvgVelocitySurroundOFFOnly = TotalVelSurroundOFFOnly/FramesSurroundLEDOFFOnly
+    else:
+        AvgVelocitySurroundOFFOnly = 0
+    if FramesCenterLEDOFFMoving > 0:
+        AvgVelocityCenterOFFMove = TotalVelCenterOFFMove/FramesCenterLEDOFFMoving
+    else:
+        AvgVelocityCenterOFFMove = 0
+    if FramesSurroundLEDOFFMoving > 0:
+        AvgVelocitySurroundOFFMove = TotalVelSurroundOFFMove/FramesSurroundLEDOFFMoving 
+    else:
+        AvgVelocitySurroundOFFMove = 0
+
+    return PercentTimeinCenterLEDon, PercentTimeinCenterLEDoff, PercentTimeinCenterMovingON, \
+    PercentTimeinCenterMovingOFF, PercentTimeinSurroundMovingON, PercentTimeinSurroundMovingOFF,\
+    PercentTimeCenterONOnly, PercentTimeCenterOFFOnly, PercentTimeSurroundONOnly, PercentTimeSurroundOFFOnly,\
+    MovementBlocksON, MovementBlocksOFF, AvgMoveDurationON, AvgMoveDurationOFF, TotalMoveDurationON,\
+    TotalMoveDurationOFF, AvgVelocityMovingON, AvgVelocityMovingOFF, AvgVelocityCenterONOnly,\
+    AvgVelocityCenterOFFOnly, AvgVelocitySurroundONOnly, AvgVelocitySurroundOFFOnly, AvgVelocityCenterONMove,\
+    AvgVelocityCenterOFFMove, AvgVelocitySurroundONMove, AvgVelocitySurroundOFFMove, \
+    AvgVelocityLEDon, AvgVelocityLEDoff, CenterLEDONTrue, CenterLEDOFFTrue, SurroundLEDONTrue, \
+    SurroundLEDOFFTrue, CenterLEDONOnly, CenterLEDOFFOnly, SurroundLEDONOnly, SurroundLEDOFFOnly
     
+for File in FileList:    
+    if not File.endswith('.xlsx'):
+        print ("skipping file named", File)
+        continue
     
-    Dataz = [Subject,Genotype,LEDPower, Timestamp, Notes, PercentTimeinCenterLEDoff,\
-    PercentTimeinCenterLEDon, PercentTimeinCenterMovingOFF, PercentTimeinCenterMovingON,\
-    MovementBlocksOFF, MovementBlocksON, AvgMoveDurationOFF, AvgMoveDurationON,\
-    TotalMoveDurationOFF, TotalMoveDurationON, AvgVelocityMovingOFF, AvgVelocityMovingON,\
-    AvgVelocityLEDoff, AvgVelocityLEDon, CenterLEDOFFTrue, CenterLEDONTrue]
+    df = pd.read_excel(File, header = None)
+    NumHead,Sbj,GT,LEDstate,DateTime,Note = Extract_Header_Info(df)
+    NB10MIN_NHR = NumHead +1
+    FiveMinBaseline2HSession_NHR = NumHead + 8992
+    DataBlock = create_DataBlock(df, NO_BASELINE_10MIN_SESSION_TRIAL_LENGTH,NB10MIN_NHR,FiveMinBaseline2HSession_NHR)
+    isMovingData = DataBlock.loc[:,'Movement(Moving / Center-point)']
+    LEDon = DataBlock.loc[:,'LED ON']
+    isInCenter = DataBlock.loc[:,'In zone']
+    Velocity = DataBlock.loc [:, 'Velocity']
+    startingPoints,endingPoints = Binary_Data_Transition_Point_Finder(isMovingData)
+    AdjStartPoints,AdjEndPoints = Remove_Minute2_LED_OFF(DataBlock,startingPoints,endingPoints)
+    PerTimeCenterON, PerTimeCenterOFF, PerTimeCenterMoveON,PerTimeCenterMoveOFF, PerTimeSurroundMoveON,\
+    PerTimeSurroundMoveOFF, PerTimeCenterOnlyON,PerTimeCenterOnlyOFF, PerTimeSurroundOnlyON ,\
+    PerTimeSurroundOnlyOFF, MovesON,MovesOFF, AvgMoveTimeON,AvgMoveTimeOFF, TotalMoveTimeON,TotalMoveTimeOFF,\
+    AvgVelMoveON,AvgVelMoveOFF, AvgVelCO_ON, AvgVelCO_OFF, AvgVelSO_ON, AvgVelSO_OFF, AvgVelCM_ON, AvgVelCM_OFF,\
+    AvgVelSM_ON, AvgVelSM_OFF,AvgVelON,AvgVelOFF,inCenterON, inCenterOFF,inSurroundON, inSurroundOFF,\
+    inCenterOnlyON, inCenterOnlyOFF, InSurroundOnlyON, InSurroundOnlyOFF \
+    = Movement_Analysis(DataBlock,isInCenter,Velocity,AdjStartPoints,AdjEndPoints)
+   
+    
+    Dataz = [Sbj,GT, LEDstate, DateTime, Note, PerTimeCenterON, PerTimeCenterOFF, PerTimeCenterMoveON,\
+    PerTimeCenterMoveOFF, PerTimeSurroundMoveON,PerTimeSurroundMoveOFF, PerTimeCenterOnlyON,\
+    PerTimeCenterOnlyOFF, PerTimeSurroundOnlyON ,PerTimeSurroundOnlyOFF, MovesON,MovesOFF, AvgMoveTimeON,\
+    AvgMoveTimeOFF, TotalMoveTimeON,TotalMoveTimeOFF,AvgVelMoveON,AvgVelMoveOFF, AvgVelCO_ON, \
+    AvgVelCO_OFF, AvgVelSO_ON, AvgVelSO_OFF, AvgVelCM_ON, AvgVelCM_OFF,AvgVelSM_ON, AvgVelSM_OFF,\
+    AvgVelON,AvgVelOFF,inCenterON, inCenterOFF,inSurroundON, inSurroundOFF,inCenterOnlyON, \
+    inCenterOnlyOFF, InSurroundOnlyON, InSurroundOnlyOFF]
     myDataList.append(Dataz)
     print (myDataList)
     
